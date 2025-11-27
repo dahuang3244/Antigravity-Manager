@@ -1,0 +1,182 @@
+# -*- coding: utf-8 -*-
+import json
+import os
+import time
+import uuid
+from pathlib import Path
+from datetime import datetime
+
+# Use relative imports
+from utils import info, error, warning, get_accounts_file_path, get_app_data_dir
+from db_manager import backup_account, restore_account, get_current_account_info
+from process_manager import close_antigravity, start_antigravity
+
+def load_accounts():
+    """加载账号列表"""
+    file_path = get_accounts_file_path()
+    if not file_path.exists():
+        return {}
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        error(f"加载账号列表失败: {e}")
+        return {}
+
+def save_accounts(accounts):
+    """保存账号列表"""
+    file_path = get_accounts_file_path()
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(accounts, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        error(f"保存账号列表失败: {e}")
+        return False
+
+def add_account_snapshot(name=None, email=None):
+    """添加当前状态为新账号，如果邮箱已存在则覆盖"""
+    # 0. 自动获取信息
+    if not email:
+        info("正在尝试从数据库读取账号信息...")
+        account_info = get_current_account_info()
+        if account_info and "email" in account_info:
+            email = account_info["email"]
+            info(f"自动获取到邮箱: {email}")
+        else:
+            warning("无法从数据库自动获取邮箱，将使用 'Unknown'")
+            email = "Unknown"
+            
+    if not name:
+        # 如果没有提供名称，使用邮箱前缀或默认名称
+        if email and email != "Unknown":
+            name = email.split("@")[0]
+        else:
+            name = f"Account_{int(time.time())}"
+        info(f"使用自动生成的名称: {name}")
+
+    # 1. 检查是否已存在相同邮箱的账号
+    accounts = load_accounts()
+    existing_account = None
+    existing_id = None
+    
+    for acc_id, acc_data in accounts.items():
+        if acc_data.get("email") == email:
+            existing_account = acc_data
+            existing_id = acc_id
+            break
+    
+    if existing_account:
+        info(f"检测到邮箱 {email} 已存在备份，将覆盖旧备份")
+        # 使用已有的 ID 和备份路径
+        account_id = existing_id
+        backup_path = Path(existing_account["backup_file"])
+        created_at = existing_account.get("created_at", datetime.now().isoformat())
+        
+        # 如果没有提供新名称，保留原名称
+        if not name or name == email.split("@")[0]:
+            name = existing_account.get("name", name)
+    else:
+        info(f"创建新账号备份: {email}")
+        # 生成新的 ID 和备份路径
+        account_id = str(uuid.uuid4())
+        backup_filename = f"{account_id}.json"
+        backup_dir = get_app_data_dir() / "backups"
+        backup_dir.mkdir(exist_ok=True)
+        backup_path = backup_dir / backup_filename
+        created_at = datetime.now().isoformat()
+    
+    # 2. 执行备份
+    info(f"正在备份当前状态为账号: {name}")
+    if not backup_account(email, str(backup_path)):
+        error("备份失败，取消添加账号")
+        return False
+    
+    # 3. 更新账号列表
+    accounts[account_id] = {
+        "id": account_id,
+        "name": name,
+        "email": email,
+        "backup_file": str(backup_path),
+        "created_at": created_at,
+        "last_used": datetime.now().isoformat()
+    }
+    
+    if save_accounts(accounts):
+        if existing_account:
+            info(f"账号 {name} ({email}) 备份已更新")
+        else:
+            info(f"账号 {name} ({email}) 添加成功")
+        return True
+    return False
+
+def delete_account(account_id):
+    """删除账号"""
+    accounts = load_accounts()
+    if account_id not in accounts:
+        error("账号不存在")
+        return False
+    
+    account = accounts[account_id]
+    name = account.get("name", "Unknown")
+    backup_file = account.get("backup_file")
+    
+    # 删除备份文件
+    if backup_file and os.path.exists(backup_file):
+        try:
+            os.remove(backup_file)
+            info(f"备份文件已删除: {backup_file}")
+        except Exception as e:
+            warning(f"删除备份文件失败: {e}")
+    
+    # 从列表中移除
+    del accounts[account_id]
+    if save_accounts(accounts):
+        info(f"账号 {name} 已删除")
+        return True
+    return False
+
+def switch_account(account_id):
+    """切换到指定账号"""
+    accounts = load_accounts()
+    if account_id not in accounts:
+        error("账号不存在")
+        return False
+    
+    account = accounts[account_id]
+    name = account.get("name", "Unknown")
+    backup_file = account.get("backup_file")
+    
+    if not backup_file or not os.path.exists(backup_file):
+        error(f"备份文件丢失: {backup_file}")
+        return False
+    
+    info(f"准备切换到账号: {name}")
+    
+    # 1. 关闭进程
+    if not close_antigravity():
+        # 尝试继续，但给出警告
+        warning("无法关闭 Antigravity，尝试强制恢复...")
+    
+    # 2. 恢复数据
+    if restore_account(backup_file):
+        # 更新最后使用时间
+        accounts[account_id]["last_used"] = datetime.now().isoformat()
+        save_accounts(accounts)
+        
+        # 3. 启动进程
+        start_antigravity()
+        info(f"切换到账号 {name} 成功")
+        return True
+    else:
+        error("恢复数据失败")
+        return False
+
+def list_accounts_data():
+    """获取账号列表数据 (用于显示)"""
+    accounts = load_accounts()
+    data = list(accounts.values())
+    # 按最后使用时间倒序排序
+    data.sort(key=lambda x: x.get("last_used", ""), reverse=True)
+    return data
