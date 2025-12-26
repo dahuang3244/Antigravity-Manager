@@ -259,6 +259,7 @@
             "port": "监听端口",
             "port_hint": "默认 8045，修改端口需重启服务",
             "auto_start": "跟随应用自动启动",
+            "allow_lan_access": "允许局域网访问",
             "api_key": "API 密钥",
             "btn_regenerate": "重新生成密钥",
             "btn_copy": "复制",

@@ -258,6 +258,7 @@
             "port": "Listen Port",
             "port_hint": "Default 8045, restart required to apply changes",
             "auto_start": "Auto Start with App",
+            "allow_lan_access": "Allow LAN Access",
             "api_key": "API Key",
             "btn_regenerate": "Regenerate Key",
             "btn_copy": "Copy",
