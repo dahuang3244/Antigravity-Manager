@@ -3,7 +3,7 @@ set -e
 
 cleanup() {
     echo "Shutting down..."
-    vncserver -kill :1 2>/dev/null || true
+    pkill -f "Xtigervnc :1" 2>/dev/null || true
     pkill -f websockify 2>/dev/null || true
     exit 0
 }
