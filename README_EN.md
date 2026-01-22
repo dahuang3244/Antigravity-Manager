@@ -1,5 +1,6 @@
 # Antigravity Tools 🚀
-> Professional AI Account Management & Proxy System (v3.3.48)
+# Antigravity Tools 🚀
+> Professional AI Account Management & Proxy System (v3.3.49)
 
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
@@ -9,7 +10,7 @@
   
   <p>
     <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.48-blue?style=flat-square" alt="Version">
+      <img src="https://img.shields.io/badge/Version-3.3.49-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -211,6 +212,13 @@ print(response.choices[0].message.content)
 ## 📝 Developer & Community
 
 *   **Changelog**:
+    *   **v3.3.49 (2026-01-22)**:
+        -   **[Core Fix] Thinking Block Order Correction in Streaming (Fix PR #949)**:
+            -   **Context**: Resolved 400 validation errors caused by disordered Thinking and text blocks in certain streaming outputs.
+            -   **Fix**: Optimized buffer logic in the streaming response collector to ensure correct sequencing and encapsulation of thinking content.
+        -   **[UX Optimization] Immediate Effect of Settings & Sync Strategy**:
+            -   **Instant Apply**: Fixed an issue where language and theme changes required manual saving. Adjustments now apply immediately across the UI and sync to global storage.
+            -   **State Sync**: Resolved conflicts between `App.tsx` and `Settings.tsx`, ensuring UI consistency during configuration loading.
     *   **v3.3.48 (2026-01-21)**:
         -   **[Core Fix] Windows Console Flashing Fix (Fix PR #933)**:
             -   **Problem**: On Windows, launching the application or executing background CLI commands would sometimes cause a command prompt window to briefly flash, disrupting the user experience.

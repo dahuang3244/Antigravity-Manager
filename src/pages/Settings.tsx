@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 function Settings() {
     const { t, i18n } = useTranslation();
-    const { config, loadConfig, saveConfig } = useConfigStore();
+    const { config, loadConfig, saveConfig, updateLanguage, updateTheme } = useConfigStore();
     const [activeTab, setActiveTab] = useState<'general' | 'account' | 'proxy' | 'advanced' | 'about'>('general');
     const [formData, setFormData] = useState<AppConfig>({
         language: 'zh',
@@ -294,6 +294,7 @@ function Settings() {
                                         const newLang = e.target.value;
                                         setFormData({ ...formData, language: newLang });
                                         i18n.changeLanguage(newLang);
+                                        updateLanguage(newLang);
                                     }}
                                 >
                                     <option value="zh">简体中文</option>
@@ -313,7 +314,11 @@ function Settings() {
                                 <select
                                     className="w-full px-4 py-4 border border-gray-200 dark:border-base-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-base-content bg-gray-50 dark:bg-base-200"
                                     value={formData.theme}
-                                    onChange={(e) => setFormData({ ...formData, theme: e.target.value })}
+                                    onChange={(e) => {
+                                        const newTheme = e.target.value;
+                                        setFormData({ ...formData, theme: newTheme });
+                                        updateTheme(newTheme);
+                                    }}
                                 >
                                     <option value="light">{t('settings.general.theme_light')}</option>
                                     <option value="dark">{t('settings.general.theme_dark')}</option>
