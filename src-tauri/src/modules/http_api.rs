@@ -578,7 +578,8 @@ pub async fn start_server(port: u16, integration: crate::modules::integration::S
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let app = Router::new()
+    // Build API routes
+    let api_routes = Router::new()
         .route("/health", get(health))
         .route("/accounts", get(list_accounts))
         .route("/accounts/current", get(get_current_account))
@@ -591,7 +592,11 @@ pub async fn start_server(port: u16, integration: crate::modules::integration::S
         .route("/user-tokens/summary", get(get_user_token_summary))
         .route("/user-tokens/{id}", put(update_user_token).delete(delete_user_token))
         .route("/user-tokens/{id}/renew", post(renew_user_token))
-        .route("/user-tokens/{id}/ips", get(get_token_ip_bindings))
+        .route("/user-tokens/{id}/ips", get(get_token_ip_bindings));
+
+    // Nest all routes under /api prefix
+    let app = Router::new()
+        .nest("/api", api_routes)
         .layer(cors)
         .with_state(state);
 
