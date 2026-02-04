@@ -199,7 +199,12 @@ export async function request<T>(cmd: string, args?: any): Promise<T> {
     const qs = params.toString();
     if (qs) url += `?${qs}`;
   } else if (mapping.method === 'POST' && args) {
-    options.body = JSON.stringify(args);
+    // [FIX] Tauri invoke 使用 { request: {...} } 格式，Web API 需要直接发送请求体
+    // 如果 args 只有一个 'request' 字段，则直接使用其内容作为请求体
+    const body = args.request !== undefined && Object.keys(args).length === 1 
+      ? args.request 
+      : args;
+    options.body = JSON.stringify(body);
   }
 
   try {
