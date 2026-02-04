@@ -5,7 +5,7 @@ use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Json, Response},
-    routing::{any, delete, get, post},
+    routing::{any, delete, get, post, put},
     Router,
 };
 use futures::TryFutureExt;

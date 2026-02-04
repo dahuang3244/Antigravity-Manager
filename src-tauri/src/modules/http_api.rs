@@ -216,29 +216,29 @@ struct LogsRequest {
 
 // User Token Request Types
 #[derive(Deserialize)]
-struct CreateUserTokenRequest {
-    username: String,
-    expires_type: String,
-    description: Option<String>,
+pub struct CreateUserTokenRequest {
+    pub username: String,
+    pub expires_type: String,
+    pub description: Option<String>,
     #[serde(default)]
-    max_ips: i32,
-    curfew_start: Option<String>,
-    curfew_end: Option<String>,
+    pub max_ips: i32,
+    pub curfew_start: Option<String>,
+    pub curfew_end: Option<String>,
 }
 
 #[derive(Deserialize)]
-struct UpdateUserTokenRequest {
-    username: Option<String>,
-    description: Option<String>,
-    enabled: Option<bool>,
-    max_ips: Option<i32>,
-    curfew_start: Option<Option<String>>,
-    curfew_end: Option<Option<String>>,
+pub struct UpdateUserTokenRequest {
+    pub username: Option<String>,
+    pub description: Option<String>,
+    pub enabled: Option<bool>,
+    pub max_ips: Option<i32>,
+    pub curfew_start: Option<Option<String>>,
+    pub curfew_end: Option<Option<String>>,
 }
 
 #[derive(Deserialize)]
-struct RenewUserTokenRequest {
-    expires_type: String,
+pub struct RenewUserTokenRequest {
+    pub expires_type: String,
 }
 
 // ============================================================================
@@ -579,20 +579,7 @@ pub async fn start_server(port: u16, integration: crate::modules::integration::S
         .allow_headers(Any);
 
     // Build API routes
-    let api_routes = Router::new()
-        .route("/health", get(health))
-        .route("/accounts", get(list_accounts))
-        .route("/accounts/current", get(get_current_account))
-        .route("/accounts/switch", post(switch_account))
-        .route("/accounts/refresh", post(refresh_all_quotas))
-        .route("/accounts/{id}/bind-device", post(bind_device))
-        .route("/logs", get(get_logs))
-        // User Token routes
-        .route("/user-tokens", get(list_user_tokens).post(create_user_token))
-        .route("/user-tokens/summary", get(get_user_token_summary))
-        .route("/user-tokens/{id}", put(update_user_token).delete(delete_user_token))
-        .route("/user-tokens/{id}/renew", post(renew_user_token))
-        .route("/user-tokens/{id}/ips", get(get_token_ip_bindings));
+    let api_routes = get_router();
 
     // Nest all routes under /api prefix
     let app = Router::new()
@@ -612,6 +599,24 @@ pub async fn start_server(port: u16, integration: crate::modules::integration::S
         .map_err(|e| format!("failed_to_run_server: {}", e))?;
 
     Ok(())
+}
+
+/// Get the router for HTTP API
+pub fn get_router() -> Router<ApiState> {
+    Router::new()
+        .route("/health", get(health))
+        .route("/accounts", get(list_accounts))
+        .route("/accounts/current", get(get_current_account))
+        .route("/accounts/switch", post(switch_account))
+        .route("/accounts/refresh", post(refresh_all_quotas))
+        .route("/accounts/{id}/bind-device", post(bind_device))
+        .route("/logs", get(get_logs))
+        // User Token routes
+        .route("/user-tokens", get(list_user_tokens).post(create_user_token))
+        .route("/user-tokens/summary", get(get_user_token_summary))
+        .route("/user-tokens/{id}", put(update_user_token).delete(delete_user_token))
+        .route("/user-tokens/{id}/renew", post(renew_user_token))
+        .route("/user-tokens/{id}/ips", get(get_token_ip_bindings))
 }
 
 /// Start HTTP API server in background (non-blocking)
