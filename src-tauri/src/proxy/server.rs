@@ -615,6 +615,12 @@ impl AxumServer {
             .route("/security/whitelist/clear", post(admin_clear_ip_whitelist))
             .route("/security/whitelist/check", get(admin_check_ip_in_whitelist))
             .route("/security/config", get(admin_get_security_config).post(admin_update_security_config))
+            // User Token Management
+            .route("/user-tokens", get(admin_list_user_tokens).post(admin_create_user_token))
+            .route("/user-tokens/summary", get(admin_get_user_token_summary))
+            .route("/user-tokens/:id", put(admin_update_user_token).delete(admin_delete_user_token))
+            .route("/user-tokens/:id/renew", post(admin_renew_user_token))
+            .route("/user-tokens/:id/ips", get(admin_get_token_ip_bindings))
             // OAuth (Web) - Admin 接口
             .route("/auth/url", get(admin_prepare_oauth_url_web))
             // 应用管理特定鉴权层 (强制校验)
@@ -3048,5 +3054,97 @@ async fn admin_clear_debug_console_logs() -> impl IntoResponse {
     crate::modules::log_bridge::clear_log_buffer();
     StatusCode::OK
 }
+
+// --- User Token Handlers ---
+// These are duplicated from http_api.rs but adapted for server.rs context (using AppState if needed)
+
+async fn admin_list_user_tokens() -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let tokens = crate::modules::user_token_db::list_tokens().map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+    Ok(Json(tokens))
+}
+
+async fn admin_create_user_token(
+    Json(payload): Json<crate::modules::http_api::CreateUserTokenRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let token = crate::modules::user_token_db::create_token(
+        payload.username,
+        payload.expires_type,
+        payload.description,
+        payload.max_ips,
+        payload.curfew_start,
+        payload.curfew_end,
+    ).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+    Ok((StatusCode::CREATED, Json(token)))
+}
+
+async fn admin_update_user_token(
+    Path(id): Path<String>,
+    Json(payload): Json<crate::modules::http_api::UpdateUserTokenRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    crate::modules::user_token_db::update_token(
+        &id,
+        payload.username,
+        payload.description,
+        payload.enabled,
+        payload.max_ips,
+        payload.curfew_start,
+        payload.curfew_end,
+    ).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn admin_delete_user_token(
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    crate::modules::user_token_db::delete_token(&id).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn admin_renew_user_token(
+    Path(id): Path<String>,
+    Json(payload): Json<crate::modules::http_api::RenewUserTokenRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    crate::modules::user_token_db::renew_token(&id, &payload.expires_type).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn admin_get_token_ip_bindings(
+    Path(token_id): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let bindings = crate::modules::user_token_db::get_token_ips(&token_id).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+    Ok(Json(bindings))
+}
+
+async fn admin_get_user_token_summary() -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let tokens = crate::modules::user_token_db::list_tokens().map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+
+    let active_tokens = tokens.iter().filter(|t| t.enabled).count();
+    let mut users = std::collections::HashSet::new();
+    for t in &tokens {
+        users.insert(t.username.clone());
+    }
+
+    Ok(Json(serde_json::json!({
+        "total_tokens": tokens.len(),
+        "active_tokens": active_tokens,
+        "total_users": users.len(),
+        "today_requests": 0
+    })))
+}
+
 
 
