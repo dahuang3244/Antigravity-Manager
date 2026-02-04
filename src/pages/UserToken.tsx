@@ -65,11 +65,24 @@ const UserToken: React.FC = () => {
                 invoke<UserToken[]>('list_user_tokens'),
                 invoke<UserTokenStats>('get_user_token_summary')
             ]);
-            setTokens(tokensData);
-            setStats(statsData);
+
+            // Safety check: ensure tokensData is an array
+            if (Array.isArray(tokensData)) {
+                setTokens(tokensData);
+            } else {
+                console.error('Invalid tokens data received:', tokensData);
+                setTokens([]);
+                // Optional: show a warning toast if data is invalid but not an error
+                // showToast('Received invalid data format', 'warning');
+            }
+
+            if (statsData) {
+                setStats(statsData);
+            }
         } catch (e) {
             console.error('Failed to load user tokens', e);
             showToast(t('common.load_failed') || 'Failed to load data', 'error');
+            setTokens([]); // Reset to empty on error
         } finally {
             setLoading(false);
         }
