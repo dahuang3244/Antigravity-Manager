@@ -5,7 +5,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
 
-use crate::modules::{account, logger, proxy_db};
+use crate::modules::{account, logger, proxy_db, user_token_db};
 
 /// Default port for HTTP API server
 pub const DEFAULT_PORT: u16 = 19527;
@@ -212,6 +212,33 @@ struct LogsRequest {
     filter: String,
     #[serde(default)]
     errors_only: bool,
+}
+
+// User Token Request Types
+#[derive(Deserialize)]
+struct CreateUserTokenRequest {
+    username: String,
+    expires_type: String,
+    description: Option<String>,
+    #[serde(default)]
+    max_ips: i32,
+    curfew_start: Option<String>,
+    curfew_end: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct UpdateUserTokenRequest {
+    username: Option<String>,
+    description: Option<String>,
+    enabled: Option<bool>,
+    max_ips: Option<i32>,
+    curfew_start: Option<Option<String>>,
+    curfew_end: Option<Option<String>>,
+}
+
+#[derive(Deserialize)]
+struct RenewUserTokenRequest {
+    expires_type: String,
 }
 
 // ============================================================================
@@ -420,6 +447,105 @@ async fn bind_device(
     }))
 }
 
+// ============================================================================
+// User Token Handlers
+// ============================================================================
+
+/// GET /user-tokens - List all user tokens
+async fn list_user_tokens() -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let tokens = user_token_db::list_tokens().map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+    Ok(Json(tokens))
+}
+
+/// POST /user-tokens - Create a new user token
+async fn create_user_token(
+    Json(payload): Json<CreateUserTokenRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let token = user_token_db::create_token(
+        payload.username,
+        payload.expires_type,
+        payload.description,
+        payload.max_ips,
+        payload.curfew_start,
+        payload.curfew_end,
+    ).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+    Ok((StatusCode::CREATED, Json(token)))
+}
+
+/// PUT /user-tokens/:id - Update a user token
+async fn update_user_token(
+    Path(id): Path<String>,
+    Json(payload): Json<UpdateUserTokenRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    user_token_db::update_token(
+        &id,
+        payload.username,
+        payload.description,
+        payload.enabled,
+        payload.max_ips,
+        payload.curfew_start,
+        payload.curfew_end,
+    ).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// DELETE /user-tokens/:id - Delete a user token
+async fn delete_user_token(
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    user_token_db::delete_token(&id).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// POST /user-tokens/:id/renew - Renew a user token
+async fn renew_user_token(
+    Path(id): Path<String>,
+    Json(payload): Json<RenewUserTokenRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    user_token_db::renew_token(&id, &payload.expires_type).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// GET /user-tokens/:id/ips - Get token IP bindings
+async fn get_token_ip_bindings(
+    Path(token_id): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let bindings = user_token_db::get_token_ips(&token_id).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+    Ok(Json(bindings))
+}
+
+/// GET /user-tokens/summary - Get user token summary statistics
+async fn get_user_token_summary() -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let tokens = user_token_db::list_tokens().map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e }))
+    })?;
+
+    let active_tokens = tokens.iter().filter(|t| t.enabled).count();
+    let mut users = std::collections::HashSet::new();
+    for t in &tokens {
+        users.insert(t.username.clone());
+    }
+
+    Ok(Json(serde_json::json!({
+        "total_tokens": tokens.len(),
+        "active_tokens": active_tokens,
+        "total_users": users.len(),
+        "today_requests": 0
+    })))
+}
+
 /// GET /logs - Get proxy logs
 async fn get_logs(
     Query(params): Query<LogsRequest>,
@@ -460,6 +586,12 @@ pub async fn start_server(port: u16, integration: crate::modules::integration::S
         .route("/accounts/refresh", post(refresh_all_quotas))
         .route("/accounts/{id}/bind-device", post(bind_device))
         .route("/logs", get(get_logs))
+        // User Token routes
+        .route("/user-tokens", get(list_user_tokens).post(create_user_token))
+        .route("/user-tokens/summary", get(get_user_token_summary))
+        .route("/user-tokens/{id}", put(update_user_token).delete(delete_user_token))
+        .route("/user-tokens/{id}/renew", post(renew_user_token))
+        .route("/user-tokens/{id}/ips", get(get_token_ip_bindings))
         .layer(cors)
         .with_state(state);
 

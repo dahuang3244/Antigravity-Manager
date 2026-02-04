@@ -136,6 +136,15 @@ const COMMAND_MAPPING: Record<string, { url: string; method: 'GET' | 'POST' | 'D
   'check_ip_in_whitelist': { url: '/api/security/whitelist/check', method: 'GET' },
   'get_security_config': { url: '/api/security/config', method: 'GET' },
   'update_security_config': { url: '/api/security/config', method: 'POST' },
+
+  // User Token Management
+  'list_user_tokens': { url: '/api/user-tokens', method: 'GET' },
+  'create_user_token': { url: '/api/user-tokens', method: 'POST' },
+  'update_user_token': { url: '/api/user-tokens/:id', method: 'POST' },
+  'delete_user_token': { url: '/api/user-tokens/:id', method: 'DELETE' },
+  'renew_user_token': { url: '/api/user-tokens/:id/renew', method: 'POST' },
+  'get_token_ip_bindings': { url: '/api/user-tokens/:token_id/ips', method: 'GET' },
+  'get_user_token_summary': { url: '/api/user-tokens/summary', method: 'GET' },
 };
 
 export async function request<T>(cmd: string, args?: any): Promise<T> {
